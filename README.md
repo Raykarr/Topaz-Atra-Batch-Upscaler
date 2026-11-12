@@ -60,4 +60,4 @@ The app runs its web interface on `127.0.0.1` (localhost). Your API key is sent 
 
 ## License
 
-No license is included yet. Add a license before accepting contributions or granting permission to reuse this project.
+MIT License
