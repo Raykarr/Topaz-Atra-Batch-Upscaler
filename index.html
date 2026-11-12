@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Topaz Batch</title>
+<style>
+  :root { --bg:#0e0f12; --card:#16181d; --line:#262a32; --text:#e8e9ec; --dim:#8b909a; --acc:#7c9cff; --ok:#3ecf8e; --warn:#f5b84b; --bad:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  .tag { font-size:11px; padding:2px 8px; border-radius:20px; background:#2a2f3a; color:var(--dim); }
+  .tag.demo { background:#3a2f12; color:var(--warn); }
+  main { padding:20px 24px; display:grid; grid-template-columns: 380px 1fr; gap:20px; max-width:1600px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0 0 12px; font-weight:600; }
+  label { display:block; font-size:12px; color:var(--dim); margin:10px 0 4px; }
+  input, select, textarea { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:7px; padding:8px 10px; font:inherit; }
+  textarea { font-family: ui-monospace, Menlo, monospace; font-size:12px; min-height:46px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > * { flex:1; }
+  .row > .shrink { flex:0 0 auto; }
+  button { background:#232733; color:var(--text); border:1px solid var(--line); border-radius:7px; padding:8px 12px; font:inherit; cursor:pointer; white-space:nowrap; }
+  button:hover { border-color:#3a4050; }
+  button.primary { background:var(--acc); color:#0b0d12; border-color:var(--acc); font-weight:600; }
+  button.danger { color:var(--bad); }
+  button:disabled { opacity:.45; cursor:default; }
+  .muted { color:var(--dim); font-size:12px; }
+  .stats { display:flex; gap:22px; margin:6px 0 2px; }
+  .stat b { font-size:22px; display:block; }
+  .names { max-height:120px; overflow:auto; font-size:12px; color:var(--dim); margin-top:8px; }
+  .check { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--text); }
+  .check input { width:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; padding:8px; border-bottom:1px solid var(--line); font-weight:600; }
+  td { padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:middle; font-size:13px; }
+  td.name { max-width:260px; word-break:break-all; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; background:#2a2f3a; color:var(--dim); }
+  .pill.queued, .pill.resumable, .pill.estimated { background:#24304d; color:#a9bdff; }
+  .pill.creating, .pill.uploading, .pill.upscaling, .pill.downloading, .pill.estimating { background:#3a2f12; color:var(--warn); }
+  .pill.done, .pill.skipped { background:#123a2a; color:var(--ok); }
+  .skipbox { margin-top:12px; padding:8px 10px; border:1px solid var(--ok); border-radius:8px; }
+  .scansum { margin-top:8px; font-weight:600; }
+  .pill.error { background:#3a1717; color:var(--bad); }
+  .pill.held { background:#3a2a12; color:var(--warn); }
+  button.mini { padding:3px 8px; font-size:11px; margin-top:4px; }
+  .bar { height:6px; background:#22252d; border-radius:4px; overflow:hidden; min-width:120px; }
+  .bar i { display:block; height:100%; background:var(--acc); transition:width .4s; }
+  .bar.done i { background:var(--ok); }
+  .err { color:var(--bad); font-size:12px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  pre { background:#0f1115; border:1px solid var(--line); border-radius:7px; padding:10px; font-size:11.5px; overflow:auto; max-height:320px; margin:0; }
+  .log { font-family: ui-monospace, Menlo, monospace; font-size:11.5px; color:var(--dim); max-height:180px; overflow:auto; white-space:pre-wrap; }
+  #toast { position:fixed; bottom:20px; right:20px; background:#3a1717; color:#ffd6d6; padding:10px 14px; border-radius:8px; display:none; max-width:420px; }
+  .summary { display:flex; gap:18px; flex-wrap:wrap; font-size:13px; color:var(--dim); margin-bottom:10px; }
+  .summary b { color:var(--text); }
+  .info { font-size:12px; color:var(--dim); line-height:1.5; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Topaz Batch Upscaler</h1>
+  <span class="tag" id="modeTag">local · 127.0.0.1</span>
+  <span class="tag" id="runTag">idle</span>
+</header>
+<main>
+<section>
+  <div class="card">
+    <h2>1 · API key</h2>
+    <div id="keyState" class="muted">no key yet</div>
+    <label>paste your Topaz API key</label>
+    <input id="key" type="password" autocomplete="off" placeholder="stays on this computer, only sent to api.topazlabs.com">
+    <label class="check"><input id="remember" type="checkbox"> remember on this computer</label>
+    <div class="row" style="margin-top:10px"><button class="primary" onclick="saveKey()">save key</button><button class="shrink" onclick="changeKey()">change key</button></div>
+    <div class="muted" style="margin-top:6px">new key? hit change key, paste the new one, save. the old one is wiped from this computer.</div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Folders</h2>
+    <label>input folder (your clips)</label>
+    <div class="row"><input id="inDir" placeholder="/Users/you/clips"><button class="shrink" onclick="pick('inDir','Pick the INPUT folder')">browse</button></div>
+    <label>output folder (upscaled files land here)</label>
+    <div class="row"><input id="outDir" placeholder="/Users/you/clips_upscaled"><button class="shrink" onclick="pick('outDir','Pick the OUTPUT folder')">browse</button></div>
+    <label class="check skipbox"><input id="skip_existing" data-s type="checkbox"> <b>only run what's left</b>: skip clips that already have a complete upscaled file in the output folder (recommended, keep on)</label>
+    <div class="row" style="margin-top:12px"><button class="primary" onclick="scan()">scan input folder</button></div>
+    <div id="scanBox" style="display:none;margin-top:12px">
+      <div class="stats"><div class="stat"><b id="nFiles">0</b><span class="muted">files</span></div><div class="stat"><b id="nVids">0</b><span class="muted">videos</span></div><div class="stat"><b id="nDone">0</b><span class="muted">done (skipped)</span></div><div class="stat"><b id="nLeft">0</b><span class="muted">remaining</span></div><div class="stat"><b id="nPart">0</b><span class="muted">partial (redo)</span></div></div>
+      <div id="scanSummary" class="scansum"></div>
+      <div class="names" id="otherFiles"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3 · Settings</h2>
+    <label>upscale model</label>
+    <select id="model" data-s><option value="slp-2.6">Starlight Precise 2.6 (slp-2.6)</option><option value="custom">other model id…</option></select>
+    <div id="customBox" style="display:none"><label>model id</label><input id="custom_model" data-s placeholder="e.g. prob-4"></div>
+    <label>sharpness <span id="sharpVal"></span> (1.0 – 5.0, slp-2.6)</label>
+    <input id="sharpness" data-s type="range" min="1" max="5" step="0.1">
+    <label>output resolution</label>
+    <div class="row">
+      <select id="res_mode" data-s><option value="4k">4K (fit 3840×2160)</option><option value="1440p">1440p</option><option value="1080p">1080p</option><option value="2x">2× source</option><option value="4x">4× source</option><option value="source">same as source</option><option value="custom">custom…</option></select>
+    </div>
+    <div class="row" id="customRes" style="display:none;margin-top:8px"><input id="custom_w" data-s type="number" placeholder="width"><input id="custom_h" data-s type="number" placeholder="height"></div>
+
+    <label>output fps</label>
+    <div class="row">
+      <select id="fpsPreset"><option value="0">keep source fps</option><option>23.976</option><option>24</option><option>25</option><option>29.97</option><option>30</option><option>48</option><option>50</option><option>60</option><option value="c">custom…</option></select>
+      <input id="out_fps" data-s type="number" step="0.001" min="15" max="240" placeholder="any fps 15 – 240" style="display:none">
+    </div>
+    <div class="muted" id="fpsNote" style="margin-top:6px"></div>
+
+    <label>fps engine (the frame interpolation model that makes the new frames)</label>
+    <select id="interp" data-s><option value="auto">auto: Apollo (apo-8), only where fps changes</option></select>
+    <div class="muted" id="engineHint" style="margin-top:6px"></div>
+    <details style="margin-top:10px"><summary class="muted">advanced: slow motion, duplicate frames</summary>
+      <label>slow motion factor (1 = off, up to 16; 2 = twice as long)</label>
+      <input id="slowmo" data-s type="number" step="0.5" min="1" max="16">
+      <label class="check"><input id="duplicate" data-s type="checkbox"> replace duplicate frames in source</label>
+    </details>
+
+    <label>encoder / profile</label>
+    <div class="row"><select id="encoder" data-s></select><select id="profile" data-s></select></div>
+    <label>quality · container · audio</label>
+    <div class="row">
+      <select id="compression" data-s><option value="High">quality: high</option><option value="Mid">mid</option><option value="Low">low</option></select>
+      <select id="container" data-s><option>mp4</option><option>mov</option><option>mkv</option></select>
+      <select id="audio" data-s><option value="Copy">audio: copy</option><option value="Convert">convert</option><option value="None">none</option></select>
+    </div>
+    <label>advanced: extra upscale-model params (JSON, optional)</label>
+    <textarea id="extra_params" data-s placeholder='{}'></textarea>
+    <label>clips running at the same time (1 – 10)</label>
+    <input id="parallel" data-s type="number" min="1" max="10">
+    <p class="info">The API has no fixed per-account job limit: clips run in parallel at Topaz, and if it gets busy it answers "slow down" (429) and this app waits and retries on its own.</p>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>4 · Progress board</h2>
+    <div class="actions">
+      <button onclick="estimate()">get credit estimate (free)</button>
+      <button class="primary" id="startBtn" onclick="start()">start upscaling</button>
+      <button onclick="post('/api/fetch',{})" title="downloads every job topaz already finished and you already paid for. never charges">fetch finished (free)</button>
+      <button class="danger" onclick="stop()">stop queue</button>
+      <button onclick="post('/api/open',{})">open output folder</button>
+    </div>
+    <div class="summary" id="summary"></div>
+    <table>
+      <thead><tr><th></th><th>clip</th><th>source</th><th>stage</th><th>progress</th><th>est. credits</th><th>output</th></tr></thead>
+      <tbody id="jobs"><tr><td colspan="7" class="muted">scan a folder to see your clips here</td></tr></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Exact request sent to Topaz (first clip)</h2>
+    <pre id="preview">—</pre>
+  </div>
+  <div class="card">
+    <h2>Log</h2>
+    <div class="log" id="log"></div>
+  </div>
+</section>
+</main>
+<div id="toast"></div>
+<script>
+const TOKEN = '{{TOKEN}}';
+let ST = null, formFilled = false;
+const $ = id => document.getElementById(id);
+
+async function api(path, opts={}) {
+  const r = await fetch(path, {...opts, headers: {'X-Batch-Token': TOKEN, 'Content-Type': 'application/json'}});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.body = j; throw e; }
+  return j;
+}
+async function post(path, body) {
+  try { const j = await api(path, {method:'POST', body: JSON.stringify(body||{})}); refresh(); return j; }
+  catch (e) { toast(e.message); }
+}
+function toast(m) { const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', 6000); }
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function saveKey() { const k=$('key').value.trim(); if(!k) return toast('paste a key first'); await post('/api/key', {key:k, remember:$('remember').checked}); $('key').value=''; }
+async function changeKey() { await post('/api/forget-key'); $('key').focus(); toast('old key cleared. paste the new key and hit save key'); }
+async function pick(id, prompt) { const j = await post('/api/pick', {prompt}); if (j && j.path) $(id).value = j.path; else toast('no native picker here: type or paste the folder path'); }
+async function scan() { await post('/api/scan', {input_dir:$('inDir').value, output_dir:$('outDir').value}); }
+async function estimate() { await post('/api/estimate', {}); }
+async function start() {
+  try { await api('/api/start', {method:'POST', body:'{}'}); refresh(); return; }
+  catch (e) {
+    const n = e.body && e.body.need_confirm;
+    if (!n) return toast(e.message);
+    const est = n.hi ? (n.lo===n.hi ? n.lo : n.lo + '–' + n.hi) : '?';
+    const msg = `This CHARGES Topaz credits for ${n.new} new clip(s): about ${est} credits`
+      + (n.unestimated ? `, plus ${n.unestimated} clip(s) with no estimate yet (cancel and hit "get credit estimate" to see them)` : '')
+      + '.' + (n.resume ? ` ${n.resume} already-paid clip(s) resume free.` : '') + ' Go?';
+    if (!confirm(msg)) return;
+    await post('/api/start', {confirm: n});
+  }
+}
+async function rerun(id, name) {
+  if (!confirm(`Re-run ${name}? Topaz already had a paid job for it. Re-running CHARGES AGAIN. Try "fetch finished" first.`)) return;
+  await post('/api/rerun', {id});
+}
+async function stop() { await post('/api/stop'); }
+
+function fillForm(s, o) {
+  const interp = $('interp');
+  for (const [k,v] of Object.entries(o.interp)) interp.insertAdjacentHTML('beforeend', `<option value="${k}">${esc(v)} (${k}): ${esc(o.interp_hints[k]||'')}</option>`);
+  const enc = $('encoder');
+  for (const k of Object.keys(o.encoders)) enc.insertAdjacentHTML('beforeend', `<option>${k}</option>`);
+  document.querySelectorAll('[data-s]').forEach(el => {
+    const v = s[el.id];
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v ?? '';
+  });
+  fillProfiles(s.profile);
+  const f = String(Number(s.out_fps)||0); const opt=[...$('fpsPreset').options].find(o=>o.value!=='c' && String(Number(o.value))===f);
+  $('fpsPreset').value = opt ? opt.value : 'c';
+  $('inDir').value = s.input_dir || ''; $('outDir').value = s.output_dir || '';
+  syncVis();
+}
+function fillProfiles(cur) {
+  const ps = ST.options.encoders[$('encoder').value] || [];
+  $('profile').innerHTML = ps.map(p => `<option ${p===cur?'selected':''}>${p}</option>`).join('');
+}
+function syncVis() {
+  $('customBox').style.display = $('model').value === 'custom' ? '' : 'none';
+  $('customRes').style.display = $('res_mode').value === 'custom' ? '' : 'none';
+  const want = Number($('out_fps').value) || 0, eng = $('interp').value, sm = Number($('slowmo').value) || 1;
+  const hints = ST?.options?.interp_hints || {}, names = ST?.options?.interp || {};
+  $('engineHint').textContent = hints[eng] || '';
+  const engName = eng === 'auto' ? 'Apollo (apo-8)' : `${names[eng]||eng} (${eng})`;
+  $('fpsNote').textContent = want
+    ? `every clip comes out at ${want} fps. clips not already at ${want} fps go through ${engName}${eng==='auto'?', picked automatically':''}; clips already at ${want} fps skip it.`
+    : (sm > 1 ? `keeps each clip's own fps; ${engName} makes the ${sm}x slow motion.` : `keeps each clip's own fps, no interpolation, no extra cost. pick a number to change it.`);
+  $('sharpVal').textContent = Number($('sharpness').value).toFixed(1);
+  $('out_fps').style.display = $('fpsPreset').value === 'c' ? '' : 'none';
+}
+function readForm() {
+  const out = {};
+  document.querySelectorAll('[data-s]').forEach(el => { out[el.id] = el.type === 'checkbox' ? el.checked : (el.type==='number'||el.type==='range' ? Number(el.value) : el.value); });
+  return out;
+}
+let saveT;
+function onSettingChange(e) {
+  if (e.target.id === 'encoder') fillProfiles();
+  if (e.target.id === 'fpsPreset') { if (e.target.value !== 'c') $('out_fps').value = e.target.value; else { $('out_fps').style.display=''; $('out_fps').focus(); } }
+  syncVis();
+  clearTimeout(saveT); saveT = setTimeout(async () => { await post('/api/settings', readForm()); loadPreview(); }, 250);
+}
+document.addEventListener('input', e => { if (e.target.matches('[data-s], #fpsPreset')) onSettingChange(e); });
+document.addEventListener('change', e => { if (e.target.matches('[data-s], #fpsPreset')) onSettingChange(e); });
+
+async function loadPreview() {
+  try { const p = await api('/api/preview'); $('preview').textContent = p.error ? ('⚠ ' + p.error) : p.body ? (p.clip + '\n' + JSON.stringify(p.body, null, 2)) : p.note; } catch(e) {}
+}
+function fmtBytes(n) { if (n > 1e9) return (n/1e9).toFixed(2)+' GB'; return (n/1e6).toFixed(1)+' MB'; }
+function fmtEst(e) { if (!e || !e.cost) return '—'; const c=e.cost; return Array.isArray(c) ? (c[0]===c[1]? c[0] : c[0]+'–'+c[1]) : c; }
+function dur(j) { if (!j.started) return ''; const s = Math.round(((j.finished||Date.now()/1000) - j.started)); return ` · ${Math.floor(s/60)}m${String(s%60).padStart(2,'0')}s`; }
+
+function render() {
+  const s = ST;
+  $('modeTag').textContent = s.demo ? 'DEMO MODE · fake API · no credits' : 'local · 127.0.0.1';
+  $('modeTag').className = 'tag' + (s.demo ? ' demo' : '');
+  $('runTag').textContent = s.running ? 'running' : 'idle';
+  $('keyState').innerHTML = s.has_key ? `<span style="color:var(--ok)">key set</span> ${esc(s.key_hint)}` : 'no key yet';
+  if (s.scan && s.scan.videos !== undefined) {
+    $('scanBox').style.display = '';
+    $('nFiles').textContent = s.scan.files; $('nVids').textContent = s.scan.videos;
+    $('nDone').textContent = s.scan.done ?? 0; $('nLeft').textContent = s.scan.remaining ?? 0; $('nPart').textContent = s.scan.partial ?? 0;
+    $('scanSummary').textContent = s.scan.summary || '';
+    $('otherFiles').innerHTML = (s.jobs||[]).map(j => esc(j.name)).join('<br>') + (s.scan.other_files?.length ? `<br><br>not videos: ${s.scan.other_files.map(esc).join(', ')}` : '');
+  }
+  const jobs = s.jobs || [];
+  if (jobs.length) {
+    $('jobs').innerHTML = jobs.map(j => {
+      const m = j.meta || {};
+      const fp = j.fps_plan;
+      const fpsLine = !fp ? '' : fp.error ? `<div class="err">${esc(fp.error)}</div>`
+        : `<div>${fp.src} fps → <b>${fp.out} fps</b>${fp.engine ? ` · ${esc(fp.engine)}${fp.slowmo>1?` · ${fp.slowmo}x slowmo`:''}` : ' · no interpolation'}</div>`;
+      const src = j.meta ? `${m.w}×${m.h} · ${m.frames}f · ${fmtBytes(j.size)}${fpsLine}` : '';
+      const active = ['uploading','upscaling','downloading'].includes(j.stage) || j.stage==='done';
+      const lockSel = s.running || ['done','skipped'].includes(j.stage) || !j.meta;
+      return `<tr>
+        <td><input type="checkbox" ${j.selected?'checked':''} ${lockSel?'disabled':''} onchange="post('/api/select',{id:'${j.id}',selected:this.checked})"></td>
+        <td class="name">${esc(j.name)}</td>
+        <td class="muted">${src}</td>
+        <td><span class="pill ${j.stage}">${esc(j.stage)}</span><div class="muted">${esc(j.msg||'')}${dur(j)}</div>${j.error?`<div class="err">${esc(j.error)}</div>`:''}${j.stage==='held'&&!j.rerun_ok&&!s.running?`<button class="mini danger" onclick="rerun('${j.id}', '${esc(j.name).replace(/'/g,'')}')">re-run (charges again)</button>`:''}</td>
+        <td>${active?`<div class="bar ${j.stage==='done'?'done':''}"><i style="width:${j.pct||0}%"></i></div><div class="muted">${(j.pct||0).toFixed(1)}%</div>`:''}</td>
+        <td>${fmtEst(j.estimate)}</td>
+        <td class="name muted">${esc(j.out_name||'')}</td></tr>`;
+    }).join('');
+    const c = st => jobs.filter(j => j.stage===st).length;
+    let lo=0, hi=0; jobs.forEach(j => { const e=j.estimate?.cost; if (Array.isArray(e) && j.selected) { lo+=e[0]; hi+=e[1]; } });
+    $('summary').innerHTML = `<span><b>${jobs.length}</b> clips</span><span><b>${c('done')}</b> done</span><span><b>${c('skipped')}</b> skipped (done before)</span><span><b>${jobs.filter(j=>['creating','uploading','upscaling','downloading'].includes(j.stage)).length}</b> active</span><span><b>${c('queued')}</b> queued</span><span><b>${c('error')}</b> errors</span>`
+      + (hi ? `<span>est. credits for selected: <b>${lo===hi?lo:lo+'–'+hi}</b></span>` : '')
+      + (s.settings.output_dir ? `<span>output: <b>${esc(s.settings.output_dir)}</b></span>` : '');
+  }
+  $('log').textContent = (s.logs||[]).slice().reverse().join('\n');
+}
+async function refresh() {
+  try {
+    ST = await api('/api/state');
+    if (!formFilled) { fillForm(ST.settings, ST.options); formFilled = true; loadPreview(); }
+    render();
+  } catch (e) {}
+}
+let lastScan = '';
+setInterval(async () => { await refresh(); const k = JSON.stringify(ST?.scan||{}); if (k !== lastScan) { lastScan = k; loadPreview(); } }, 1500);
+refresh();
+</script>
+</body>
+</html>
